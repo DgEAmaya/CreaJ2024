@@ -3,65 +3,62 @@
 // incluir la clase db_connect
 require_once __DIR__ . '/conexionn.php';
 
-@$email = $_POST['email'];
-@$contraseña = $_POST['contraseña']; 
-
-@$sesion= $_SESSION['usuario'];
-// conectar a la base de datos
-
-$bs = new DB_CONNECT();
-$conn = $bs->connect(); 
-//
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
-
-    if (empty($email) or empty($contraseña)) {
-        echo '<div class="sesion_error" data-text="ComplTodCamp">Por favor completa todos los campos.</div>';
-    } else {
-
-        if (isset($_POST['email'])) {
-
-            $sql = "SELECT * FROM cliente WHERE email='$email' AND contraseña='$contraseña';";
-            $result = mysqli_query($bs->myconn, $sql);
-            if (mysqli_num_rows($result) > 0) {
-
-                $row = mysqli_fetch_assoc($result);
-                                                                                       
-                $_SESSION['cliente']['usuario'] = $row[1];
-                $_SESSION['cliente']['idCliente'] = $row['idCliente'];
-                $_SESSION['cliente']['nombre'] = $row['nombre'];
-                $_SESSION['cliente']['apellido'] = $row['apellido'];
-                $_SESSION['cliente']['email'] = $row['email'];
-                $_SESSION['cliente']['dui'] = $row['dui'];
-                $_SESSION['cliente']['direccion'] = $row['direccion'];
-                $_SESSION['cliente']['tarjetaCredito'] = $row['tarjetaCredito'];
-                $_SESSION['cliente']['telefono'] = $row['telefono'];
-                $_SESSION['cliente']['contraseña'] = $row['contraseña'];
-
-                $_SESSION['cliente']['es_administrador'] = $row['es_administrador'];
-                $_SESSION['cliente']['es_Inspector'] = $row['es_Inspector'];
-
-                if ($_SESSION['cliente']['es_Inspector']) {
-                    header("Location: inspector.php");
-                    exit();
-                }
-                
-
-                if ($_SESSION['cliente']['es_administrador']) {
-                    header("Location: admin.php");
-                    exit();
-                }
-
-                header("Location: index.php");
-                exit();
-            } else {
-
-                echo '
-                <div class="AlerSesionRegistro alert alert-danger " data-text="UserPassIncorr">Usuario y password incorrectos, no se puede iniciar sesion.</div>';
-            }
-        }
-    }
+function validate($data) {
+    return htmlspecialchars(stripslashes(trim($data)));
 }
+
+    session_start();
+
+    @$email = $_POST['email'];
+    @$contraseña = $_POST['contraseña']; 
+
+    @$sesion= $_SESSION['usuario'];
+    // conectar a la base de datos
+
+    $bs = new DB_CONNECT();
+    $conn = $bs->connect();
+
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    $email = validate($_POST['email']);
+    $contraseña = validate($_POST['contraseña']);
+
+    
+    // Validación de usuario y contraseña
+    $sql = "SELECT idCliente, email, PrimerNombre, PrimerApellido, contraseña, Rol FROM cliente WHERE email = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $stmt->store_result();
+    
+    if ($stmt->num_rows > 0) {
+        $stmt->bind_result($idCliente, $email, $PrimerNombre, $PrimerApellido, $contraseña_hash, $Rol);
+        $stmt->fetch();
+        
+        if (password_verify($contraseña, $contraseña_hash)) {
+            $_SESSION['idCliente'] = $idCliente;
+            $_SESSION['PrimerNombre'] = $PrimerNombre;
+            $_SESSION['PrimerApellido'] = $PrimerApellido;
+            $_SESSION['Rol'] = $Rol;
+            
+            if ($Rol == 1) { // Admin
+                header("Location: index.php");
+            } elseif ($Rol == 2) { // Cliente
+                header("Location: ubspector.php");
+            } elseif ($Rol == 3) { // Empleado
+                header("Location: admin.php");
+            }
+            exit();
+        } else {
+            $errors[] = "Contraseña incorrecta.";
+        }
+    } else {
+        $errors[] = "El nombre de usuario no existe.";
+    }
+    $stmt->close();
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -85,7 +82,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <a href="../HTML/index.html" title="Logo">
                 <img src="../Imagenes/Logo_grande_negro.png" alt="Laplace Logo" class="logo">
             </a>
-            <form class="my-form" method="POST">  
+            <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" class="my-form" method="POST">  
                 <div class="form-welcome-row">
                     <h1 style="color: black; font-family:Bebas neue; font-size:2.5rem;" >Bienvenid@ a Bidding Sure!</h1>
                     <h2>Encuentra lo que buscas en un solo lugar</h2>
